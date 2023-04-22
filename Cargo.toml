@@ -1,0 +1,16 @@
+[package]
+name = "grepo"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+confy = { version = "0.5.1", features = ["yaml_conf"], default-features = false }
+lazy_static = "1.4.0"
+serde = "1.0.160"
+serde_json = "0.9.10"
+serde_derive = "1.0.160"
+clap = { version = "3.2.23", features = ["derive"] } #3.2.23
+prettytable-rs = "0.10.0"
+git2 = "0.17.1"
