@@ -3,9 +3,6 @@ extern crate confy;
 
 #[macro_use]
 extern crate serde_derive;
-#[macro_use]
-extern crate prettytable;
-use prettytable::{Cell, Row, Table};
 
 use clap::{AppSettings, Parser, Subcommand};
 use confy::ConfyError;
@@ -41,7 +38,7 @@ struct Cli {
 }
 
 #[derive(Subcommand, Debug)]
-enum RepoCmds {
+enum WatchCmds {
     /// Add a new repo to watch
     #[clap(setting(AppSettings::ArgRequiredElseHelp))]
     Add {
@@ -67,7 +64,7 @@ enum BranchCmds {
         name: String,
     },
     /// View a list of all branches in all watched repos
-    WatchList {},
+    List {},
 }
 
 #[derive(Subcommand, Debug)]
@@ -81,8 +78,10 @@ enum Commands {
     ShowConfig {},
     ///Show location of config file
     ConfigPath {},
+    /// Commands for watched repos
     #[clap(subcommand)]
-    Repo(RepoCmds),
+    Watch(WatchCmds),
+    /// Commands for repo branches
     #[clap(subcommand)]
     Branch(BranchCmds),
 }
@@ -115,15 +114,6 @@ fn get_config() -> Result<ConfigFile, ConfyError> {
     }
 }
 
-// fn create_output_table(title: String, rows: Vec<String>) -> Table {
-//     let mut table = Table::new();
-//     table.add_row(row![title]);
-//     for row in rows {
-//         table.add_row(row![row]);
-//     }
-//     table
-// }
-
 fn main() {
     let args = Cli::parse();
     let cfg = get_config().expect("Retrieving config file failed");
@@ -153,13 +143,13 @@ fn main() {
                 .expect("Failed to retrieve config file path");
             println!("{}", file.to_string_lossy())
         }
-        Commands::Repo(RepoCmds::Add { name }) => {
+        Commands::Watch(WatchCmds::Add { name }) => {
             let mut cfg = get_config().unwrap();
             cfg.repos.push(name);
             confy::store(env!("CARGO_PKG_NAME"), None, &cfg);
             println!("Updated repos: Now {:?}", cfg.repos);
         }
-        Commands::Repo(RepoCmds::Remove { name }) => {
+        Commands::Watch(WatchCmds::Remove { name }) => {
             let mut cfg = get_config().unwrap();
             let mut removed: bool = false;
             cfg.repos.retain(|s| {
@@ -178,9 +168,8 @@ fn main() {
                 println!("Repo {} is not found", name);
             }
         }
-        Commands::Repo(RepoCmds::List {}) => {
+        Commands::Watch(WatchCmds::List {}) => {
             let cfg = get_config().expect("Retrieving config file failed");
-            //println!("{}", create_output_table("Repos".to_string(), cfg.repos))
             println!(
                 "Watched Repos:\n--------------------------\n{}",
                 cfg.repos.join("\n")
@@ -194,7 +183,7 @@ fn main() {
                 found_in_repo.join("\n")
             )
         }
-        Commands::Branch(BranchCmds::WatchList {}) => {
+        Commands::Branch(BranchCmds::List {}) => {
             let cfg = get_config().expect("Retrieving config file failed");
             git::get_repos(cfg)
         }
