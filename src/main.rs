@@ -151,17 +151,8 @@ fn main() {
         }
         Commands::Watch(WatchCmds::Remove { name }) => {
             let mut cfg = get_config().unwrap();
-            let mut removed: bool = false;
-            cfg.repos.retain(|s| {
-                if s.to_owned() != name {
-                    true
-                } else {
-                    removed = true;
-                    false
-                }
-            });
-
-            if removed {
+            if let Some(pos) = cfg.repos.iter().position(|s| *s == name) {
+                cfg.repos.remove(pos);
                 confy::store(env!("CARGO_PKG_NAME"), None, &cfg).unwrap();
                 println!("Updated repos: Now {:?}", cfg.repos);
             } else {
@@ -176,11 +167,14 @@ fn main() {
             )
         }
         Commands::Branch(BranchCmds::Search { name }) => {
-            let found_in_repo = git::search_repos(cfg.clone(), name.clone());
+            let mut found_in_repo = git::search_repos(cfg.clone(), name.clone());
+            let mut repo_branch_concat = found_in_repo.iter()
+                .map(|(k,v)| format!("{} - {}\n", k.clone(), v.join(",")))
+                .collect::<String>();
             println!(
                 "Search Pattern '{}' found in repos:\n--------------------------\n{}",
                 name,
-                found_in_repo.join("\n")
+                repo_branch_concat
             )
         }
         Commands::Branch(BranchCmds::List {}) => {

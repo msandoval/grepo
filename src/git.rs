@@ -1,7 +1,8 @@
+use std::collections::HashMap;
+use crate::ConfigFile;
+use git2::Repository;
 use std::ffi::CString;
 use std::path::PathBuf;
-use git2::Repository;
-use crate::ConfigFile;
 
 struct GitRepo {
     repo_path: PathBuf,
@@ -29,18 +30,23 @@ fn get_branches(cfg: ConfigFile, repo: String) -> Vec<String> {
 }
 
 pub fn get_repos(cfg: ConfigFile) {
-    cfg.repos
-        .clone()
-        .into_iter()
-        .for_each(|repo| {
-            let branches = get_branches(cfg.clone(), repo.clone()).join("\n");
-            println!("Repo: {}\n--------------------------\n{}\n", repo, branches);
-        });
+    cfg.repos.clone().into_iter().for_each(|repo| {
+        let branches = get_branches(cfg.clone(), repo.clone()).join("\n");
+        println!("Repo: {}\n--------------------------\n{}\n", repo, branches);
+    });
 }
 
-pub fn search_repos(cfg: ConfigFile, name: String) -> Vec<String> {
-    cfg.clone().repos
-        .into_iter()
-        .filter(|repo| get_branches(cfg.clone(), repo.clone()).into_iter().any(|branch| branch.contains(&name)))
-        .collect()
+pub fn search_repos(cfg: ConfigFile, name: String) -> HashMap<String, Vec<String>> {
+    let repo_branches = cfg.clone().repos.into_iter().filter_map(|repo| {
+        let branches = get_branches(cfg.clone(), repo.clone());
+        let filtered_branches: Vec<String> = branches.into_iter()
+            .filter(|branch| branch.contains(&name))
+            .collect();
+        if !filtered_branches.is_empty() {
+            Some((repo, filtered_branches))
+        } else {
+            None
+        }
+    }).collect::<HashMap<String, Vec<String>>>();
+    repo_branches
 }
