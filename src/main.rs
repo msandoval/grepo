@@ -65,6 +65,8 @@ enum BranchCmds {
     },
     /// View a list of all branches in all watched repos
     List {},
+    /// Get a list of current branches all watched repos are on
+    Curr {}
 }
 
 #[derive(Subcommand, Debug)]
@@ -180,6 +182,12 @@ fn main() {
         Commands::Branch(BranchCmds::List {}) => {
             let cfg = get_config().expect("Retrieving config file failed");
             git::get_repos(cfg)
+        }
+        Commands::Branch(BranchCmds::Curr {}) => {
+            let cfg = get_config().expect("Retrieving config file failed");
+            git::get_curr_branches(cfg).into_iter().for_each(|data| {
+                println!("Repo: {}\n--------------------------\n{}\n", data.0, data.1);
+            })
         }
     }
 }
