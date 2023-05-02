@@ -118,7 +118,7 @@ fn get_config() -> Result<ConfigFile, ConfyError> {
 
 fn main() {
     let args = Cli::parse();
-    let cfg = get_config().expect("Retrieving config file failed");
+    let mut cfg = get_config().expect("Retrieving config file failed");
     match args.command {
         Commands::BaseDir { name } => match name {
             None => {
@@ -146,13 +146,11 @@ fn main() {
             println!("{}", file.to_string_lossy())
         }
         Commands::Watch(WatchCmds::Add { name }) => {
-            let mut cfg = get_config().unwrap();
             cfg.repos.push(name);
             confy::store(env!("CARGO_PKG_NAME"), None, &cfg);
             println!("Updated repos: Now {:?}", cfg.repos);
         }
         Commands::Watch(WatchCmds::Remove { name }) => {
-            let mut cfg = get_config().unwrap();
             if let Some(pos) = cfg.repos.iter().position(|s| *s == name) {
                 cfg.repos.remove(pos);
                 confy::store(env!("CARGO_PKG_NAME"), None, &cfg).unwrap();
@@ -162,7 +160,6 @@ fn main() {
             }
         }
         Commands::Watch(WatchCmds::List {}) => {
-            let cfg = get_config().expect("Retrieving config file failed");
             println!(
                 "Watched Repos:\n--------------------------\n{}",
                 cfg.repos.join("\n")
@@ -180,22 +177,16 @@ fn main() {
             )
         }
         Commands::Branch(BranchCmds::List {}) => {
-            let cfg = get_config().expect("Retrieving config file failed");
-            git::get_repos(cfg)
+            git::get_repos(cfg).into_iter().for_each(|data| {
+                let branches = data.1.join("\n");
+                println!("Repo: {}\n--------------------------\n{}\n", data.0, branches);
+            })
         }
         Commands::Branch(BranchCmds::Curr {}) => {
-            let cfg = get_config().expect("Retrieving config file failed");
-            git::get_curr_branches(cfg).into_iter().for_each(|data| {
+            git::get_current_branches(cfg).into_iter().for_each(|data| {
                 println!("Repo: {}\n--------------------------\n{}\n", data.0, data.1);
             })
         }
     }
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn does_this_work() {
-        assert_eq!(4, 4);
-    }
-}
