@@ -32,6 +32,7 @@ impl Default for ConfigFile {
 #[clap(name = "grepo")]
 #[clap(about = "A utility to help organize and search for data in git repos")]
 
+#[clap(setting = AppSettings::InferSubcommands)]
 struct Cli {
     #[clap(subcommand)]
     command: Commands,
@@ -81,10 +82,10 @@ enum Commands {
     ///Show location of config file
     ConfigPath {},
     /// Commands for watched repos
-    #[clap(subcommand)]
+    #[clap(subcommand, alias="wa")]
     Watch(WatchCmds),
     /// Commands for repo branches
-    #[clap(subcommand)]
+    #[clap(subcommand, alias="br")]
     Branch(BranchCmds),
 }
 
