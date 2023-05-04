@@ -12,3 +12,4 @@ serde_json = "0.9.10"
 serde_derive = "1.0.160"
 clap = { version = "3.2.23", features = ["derive"] } #3.2.23
 git2 = "0.17.1"
+dialoguer = "0.10.4"

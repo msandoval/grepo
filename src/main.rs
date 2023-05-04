@@ -10,6 +10,7 @@ use std::collections::HashSet;
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
 use std::fs;
+use dialoguer::Confirm;
 
 const BASE_PATH: &str = "/repos";
 
@@ -30,6 +31,7 @@ impl Default for ConfigFile {
 
 #[derive(Parser, Debug)]
 #[clap(name = "grepo")]
+#[clap(version = "0.1.0")]
 #[clap(about = "A utility to help organize and search for data in git repos")]
 
 #[clap(setting = AppSettings::InferSubcommands)]
@@ -72,21 +74,24 @@ enum BranchCmds {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
-    ///Show base directory to look for repos
+    /// Show/set base directory of repos
     BaseDir {
-        /// Optional: update the default base directory to search within
-        name: Option<String>,
+        /// Optional: update the default base directory of watched repos
+        path: Option<String>,
     },
-    ///Show a list of settings saved
+    /// Show a list of settings saved
     ShowConfig {},
-    ///Show location of config file
+    /// Show location of config file
     ConfigPath {},
     /// Commands for watched repos
-    #[clap(subcommand, alias="wa")]
+    #[clap(subcommand, alias="w")]
     Watch(WatchCmds),
     /// Commands for repo branches
-    #[clap(subcommand, alias="br")]
+    #[clap(subcommand, alias="b")]
     Branch(BranchCmds),
+    /// Replaces the watched repo list with a list from current base directory
+    #[clap(alias="sbd")]
+    ScanBaseDir {}
 }
 
 fn has_config(file_path: &str) -> bool {
@@ -121,7 +126,7 @@ fn main() {
     let args = Cli::parse();
     let mut cfg = get_config().expect("Retrieving config file failed");
     match args.command {
-        Commands::BaseDir { name } => match name {
+        Commands::BaseDir { path } => match path {
             None => {
                 println!("{}", cfg.base_path);
             }
@@ -187,6 +192,26 @@ fn main() {
             git::get_current_branches(cfg).into_iter().for_each(|data| {
                 println!("Repo: {}\n--------------------------\n{}\n", data.0, data.1);
             })
+        }
+        Commands::ScanBaseDir {} => {
+            if Confirm::new().with_prompt("This will reset your current watched repos with directories found in the base path. Are you sure?").interact().unwrap() {
+                let mut new_config = ConfigFile {
+                    base_path: cfg.base_path.clone(),
+                    repos: vec![],
+                };
+                new_config.repos = fs::read_dir(cfg.base_path)
+                    .unwrap()
+                    .into_iter()
+                    .filter_map(|path| {
+                        match path.as_ref().unwrap().path().is_dir() {
+                            true => { let out = &path.unwrap().file_name().to_owned().into_string().unwrap(); Some(out.clone()) }
+                            false => { None }
+                        }
+                    } )
+                    .collect::<Vec<String>>();
+                confy::store(env!("CARGO_PKG_NAME"), None, &new_config);
+                println!("Found repos:\n--------------------------\n{}\n", new_config.repos.join("\n"));
+            }
         }
     }
 }
