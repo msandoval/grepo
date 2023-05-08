@@ -198,7 +198,7 @@ fn main() {
             })
         }
         Commands::ScanBaseDir {} => {
-            if Confirm::new().with_prompt("This will reset your current watched repos with directories found in the base path. Are you sure?").interact().unwrap() {
+            if Confirm::new().with_prompt(format!("This will reset your current watched repos with directories found in the base path ({}). Are you sure?",cfg.base_path.clone())).interact().unwrap() {
                 let mut new_config = ConfigFile {
                     base_path: cfg.base_path.clone(),
                     repos: vec![],
