@@ -46,13 +46,13 @@ enum WatchCmds {
     #[clap(setting(AppSettings::ArgRequiredElseHelp))]
     Add {
         /// Name of repo to add to the watch
-        name: String,
+        names: String,
     },
     /// Remove a repo to watch
     #[clap(setting(AppSettings::ArgRequiredElseHelp))]
     Remove {
         /// Name of repo to remove from watch
-        name: String,
+        names: String,
     },
     /// View a list of watched repos
     List {},
@@ -142,7 +142,7 @@ fn main() {
                     cfg.base_path, updated_cfg.base_path
                 );
             }
-        },
+        }
         Commands::ShowConfig {} => {
             println!("{:?}", cfg);
         }
@@ -151,19 +151,23 @@ fn main() {
                 .expect("Failed to retrieve config file path");
             println!("{}", file.to_string_lossy())
         }
-        Commands::Watch(WatchCmds::Add { name }) => {
-            cfg.repos.push(name);
-            confy::store(env!("CARGO_PKG_NAME"), None, &cfg);
+        Commands::Watch(WatchCmds::Add { names }) => {
+            let mut repos: HashSet<String> = cfg.clone().repos.into_iter().collect();
+            repos.extend(names.split(",").map(|name| name.trim().to_string()) );
+            cfg.repos = repos.into_iter().collect::<Vec<String>>();
+            confy::store(env!("CARGO_PKG_NAME"), None, &cfg).unwrap();
             println!("Updated repos: Now {:?}", cfg.repos);
         }
-        Commands::Watch(WatchCmds::Remove { name }) => {
-            if let Some(pos) = cfg.repos.iter().position(|s| *s == name) {
-                cfg.repos.remove(pos);
-                confy::store(env!("CARGO_PKG_NAME"), None, &cfg).unwrap();
-                println!("Updated repos: Now {:?}", cfg.repos);
-            } else {
-                println!("Repo {} is not found", name);
+        Commands::Watch(WatchCmds::Remove { names }) => {
+            for name in names.split(",") {
+                if let Some(pos) = cfg.repos.iter().position(|s| *s == name) {
+                    cfg.repos.remove(pos);
+                } else {
+                    println!("Repo {} is not found", name);
+                }
             }
+            confy::store(env!("CARGO_PKG_NAME"), None, &cfg).unwrap();
+            println!("Updated repos: Now {:?}", cfg.repos);
         }
         Commands::Watch(WatchCmds::List {}) => {
             println!(
@@ -199,15 +203,18 @@ fn main() {
                     base_path: cfg.base_path.clone(),
                     repos: vec![],
                 };
-                new_config.repos = fs::read_dir(cfg.base_path)
+                new_config.repos = fs::read_dir(cfg.clone().base_path)
                     .unwrap()
                     .into_iter()
-                    .filter_map(|path| {
-                        match path.as_ref().unwrap().path().is_dir() {
-                            true => { let out = &path.unwrap().file_name().to_owned().into_string().unwrap(); Some(out.clone()) }
-                            false => { None }
+                    .filter_map(|path|
+                        if path.as_ref().unwrap().path().is_dir() {
+                            let out = &path.unwrap().file_name().to_owned().into_string().unwrap();
+                            Some(out.clone())
+                        } else {
+                            None
                         }
-                    } )
+                    )
+                    .filter(|repo| git::get_valid_repo(cfg.clone(), repo.to_owned()))
                     .collect::<Vec<String>>();
                 confy::store(env!("CARGO_PKG_NAME"), None, &new_config);
                 println!("Found repos:\n--------------------------\n{}\n", new_config.repos.join("\n"));

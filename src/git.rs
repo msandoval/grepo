@@ -8,7 +8,10 @@ struct GitRepo {
     config: ConfigFile,
     repo_name: String
 }
-
+#[derive(Debug)]
+pub enum GitRepoErr {
+    OpenFailure
+}
 impl GitRepo {
     /// Create new GitRepo
     fn new(config: ConfigFile, repo_name: String) -> GitRepo {
@@ -18,23 +21,24 @@ impl GitRepo {
         }
     }
     /// Open a Git repository and return object
-    fn open(&mut self) -> Repository {
+    fn open(&mut self) -> Result<Repository, GitRepoErr> {
         let repo_path = PathBuf::from(format!("{}/{}", self.config.base_path, self.repo_name.clone()));
         let found_repo = match Repository::open(repo_path) {
-            Ok(repo) => repo,
-            Err(e) => panic!("failed to open: {}", e),
+            Ok(repo) => Ok(repo),
+            Err(e) => Err(GitRepoErr::OpenFailure),
         };
         found_repo
     }
     fn all_branches(&mut self) -> Vec<String> {
         self.open()
+            .expect("Failed to open git repo")
             .branches(Some(git2::BranchType::Local))
             .unwrap()
             .map(|b| b.unwrap().0.name().unwrap().unwrap().to_owned())
             .collect()
     }
     fn current_branch(&mut self) -> String {
-        let repo = self.open();
+        let repo = self.open().expect("Failed to open git repo");
         let head = match repo.head() {
             Ok(head) => Some(head),
             Err(ref e) if e.code() == ErrorCode::UnbornBranch || e.code() == ErrorCode::NotFound => {
@@ -76,4 +80,11 @@ pub fn get_current_branches(cfg: ConfigFile) -> Vec<(String, String)> {
         .into_iter()
         .map(|repo| { (repo.clone(), GitRepo::new(cfg.clone(),repo.clone()).current_branch() ) })
         .collect::<Vec<(String,String)>>()
+}
+
+pub fn get_valid_repo(cfg: ConfigFile, repo_name: String) -> bool {
+    match GitRepo::new(cfg, repo_name).open() {
+        Ok(_) => { true }
+        Err(_) => { false }
+    }
 }
