@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use crate::ConfigFile;
 use git2::{ErrorCode, Repository};
-use std::ffi::CString;
 use std::path::PathBuf;
 
 struct GitRepo {

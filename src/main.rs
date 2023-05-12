@@ -214,10 +214,18 @@ fn main() {
                             None
                         }
                     )
-                    .filter(|repo| git::get_valid_repo(cfg.clone(), repo.to_owned()))
+                    .filter_map(|repo| {
+                        if git::get_valid_repo(cfg.clone(), repo.to_owned()) {
+                            println!("Found repo: {}", repo.clone());
+                            Some(repo)
+                        } else {
+                            println!("Skipping {}: Not a valid repo", repo.clone());
+                            None
+                        }
+                    })
                     .collect::<Vec<String>>();
                 confy::store(env!("CARGO_PKG_NAME"), None, &new_config);
-                println!("Found repos:\n--------------------------\n{}\n", new_config.repos.join("\n"));
+                println!("Watched repos:\n--------------------------\n{}\n", new_config.repos.join("\n"));
             }
         }
     }
