@@ -6,11 +6,11 @@ extern crate serde_derive;
 
 use clap::{AppSettings, Parser, Subcommand};
 use confy::ConfyError;
+use dialoguer::Confirm;
 use std::collections::HashSet;
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
 use std::fs;
-use dialoguer::Confirm;
 
 const BASE_PATH: &str = "/repos";
 
@@ -33,7 +33,6 @@ impl Default for ConfigFile {
 #[clap(name = "grepo")]
 #[clap(version = "0.1.0")]
 #[clap(about = "A utility to help organize and search for data in git repos")]
-
 #[clap(setting = AppSettings::InferSubcommands)]
 struct Cli {
     #[clap(subcommand)]
@@ -47,6 +46,8 @@ enum WatchCmds {
     Add {
         /// Name of repo to add to the watch
         names: String,
+        /// (true|false) - Clear the current saved watched repo list and add only those passed in
+        reset_watched: Option<bool>,
     },
     /// Remove a repo to watch
     #[clap(setting(AppSettings::ArgRequiredElseHelp))]
@@ -69,7 +70,7 @@ enum BranchCmds {
     /// View a list of all branches in all watched repos
     List {},
     /// Get a list of current branches all watched repos are on
-    Curr {}
+    Curr {},
 }
 
 #[derive(Subcommand, Debug)]
@@ -84,14 +85,14 @@ enum Commands {
     /// Show location of config file
     ConfigPath {},
     /// Commands for watched repos
-    #[clap(subcommand, alias="w")]
+    #[clap(subcommand, alias = "w")]
     Watch(WatchCmds),
     /// Commands for repo branches
-    #[clap(subcommand, alias="b")]
+    #[clap(subcommand, alias = "b")]
     Branch(BranchCmds),
     /// Replaces the watched repo list with a list from current base directory
-    #[clap(alias="sbd")]
-    ScanBaseDir {}
+    #[clap(alias = "sbd")]
+    ScanBaseDir {},
 }
 
 fn has_config(file_path: &str) -> bool {
@@ -151,10 +152,25 @@ fn main() {
                 .expect("Failed to retrieve config file path");
             println!("{}", file.to_string_lossy())
         }
-        Commands::Watch(WatchCmds::Add { names }) => {
-            let mut repos: HashSet<String> = cfg.clone().repos.into_iter().collect();
-            repos.extend(names.split(",").map(|name| name.trim().to_string()) );
-            cfg.repos = repos.into_iter().collect::<Vec<String>>();
+        Commands::Watch(WatchCmds::Add { names, reset_watched }) => {
+            let mut repos: HashSet<String> = match reset_watched {
+                Some(false) | None => { cfg.clone().repos.into_iter().collect() },
+                Some(true) => HashSet::new()
+            };
+            let valid_repos = names.split(",")
+                .map(|name| name.trim().to_string())
+                .filter(|name| {
+                    if git::get_valid_repo(cfg.clone(), name.clone()) {
+                        true
+                    } else {
+                        println!("Skipping {}: Not a valid repo", name.clone());
+                        false
+                    }
+                });
+            let mut new_repos = repos;
+            new_repos.extend(valid_repos);
+            cfg.repos = new_repos.into_iter().collect();
+
             confy::store(env!("CARGO_PKG_NAME"), None, &cfg).unwrap();
             println!("Updated repos: Now {:?}", cfg.repos);
         }
@@ -230,4 +246,3 @@ fn main() {
         }
     }
 }
-
