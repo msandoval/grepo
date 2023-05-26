@@ -19,6 +19,20 @@ SUBCOMMANDS:
     watch            Commands for watched repos
 ```
 
+## Quick Start
+1. Setup your base directory of repos
+```
+grepo base-dir <base directory of repos>
+```
+2. You can now either add the repos from the base directory to watch manually:
+```
+grepo watch add <repo name>
+```
+or you can scan the base directory to gather a list of all git repos to watch:
+```
+grepo scan-base-dir
+```
+
 ## Using grepo
 
 This tool was created to help git users whose workflow contains multiple repos. In many instances, you will want to see summarized data about the status
