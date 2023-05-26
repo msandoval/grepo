@@ -2,6 +2,14 @@ use std::collections::HashMap;
 use crate::ConfigFile;
 use git2::{ErrorCode, Repository};
 use std::path::PathBuf;
+use chrono::{NaiveDateTime, Utc, DateTime, Local};
+use tabled::{Table, Tabled};
+
+#[derive(Tabled)]
+pub struct BranchInfo {
+    pub repo: String,
+    pub branch: String,
+}
 
 struct GitRepo {
     config: ConfigFile,
@@ -28,12 +36,20 @@ impl GitRepo {
         };
         found_repo
     }
-    fn all_branches(&mut self) -> Vec<String> {
+    fn all_branches(&mut self) -> Vec<BranchInfo> {
         self.open()
             .expect("Failed to open git repo")
             .branches(Some(git2::BranchType::Local))
             .unwrap()
-            .map(|b| b.unwrap().0.name().unwrap().unwrap().to_owned())
+            .map(|b| {
+                let (branch, _) = b.expect("Expected branch error");
+                let branch_name = branch.name().unwrap().unwrap().to_owned();
+
+                BranchInfo{
+                    repo: self.repo_name.clone(),
+                    branch: branch_name,
+                }
+            })
             .collect()
     }
     fn current_branch(&mut self) -> String {
@@ -50,26 +66,31 @@ impl GitRepo {
     }
 }
 
-pub fn get_repos(cfg: ConfigFile) -> Vec<(String, Vec<String>)> {
+pub fn get_repo_branches(cfg: ConfigFile) -> Vec<(String, Vec<String>)> {
     cfg.repos
         .clone()
         .into_iter()
-        .map(|repo| { let branches = GitRepo::new(cfg.clone(), repo.clone()).all_branches(); (repo, branches)})
+        .map(|repo| {
+            let branches = GitRepo::new(cfg.clone(), repo.clone()).all_branches();
+            (repo, branches.into_iter().map(|b| b.branch).collect())
+        })
         .collect::<Vec<(String,Vec<String>)>>()
 }
 
-pub fn search_repos(cfg: ConfigFile, name: String) -> HashMap<String, Vec<String>> {
+pub fn search_repos(cfg: ConfigFile, name: String) -> HashMap<String, Vec<BranchInfo>> {
     let repo_branches = cfg.clone().repos.into_iter().filter_map(|repo| {
         let branches = GitRepo::new(cfg.clone(), repo.clone()).all_branches();
-        let filtered_branches: Vec<String> = branches.into_iter()
-            .filter(|branch| branch.contains(&name))
+        let filtered_branches: Vec<BranchInfo> = branches.into_iter()
+            .filter(|branch| {
+                branch.branch.contains(&name)
+            })
             .collect();
         if !filtered_branches.is_empty() {
             Some((repo, filtered_branches))
         } else {
             None
         }
-    }).collect::<HashMap<String, Vec<String>>>();
+    }).collect::<HashMap<String, Vec<BranchInfo>>>();
     repo_branches
 }
 

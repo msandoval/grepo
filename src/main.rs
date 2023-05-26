@@ -4,13 +4,18 @@ extern crate confy;
 #[macro_use]
 extern crate serde_derive;
 
-use clap::{AppSettings, Parser, Subcommand};
+use clap::{AppSettings, Parser, Subcommand, Arg};
 use confy::ConfyError;
 use dialoguer::Confirm;
 use std::collections::HashSet;
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
 use std::fs;
+use tabled::{Table, Tabled, builder::Builder, settings::Style};
+use tabled::settings::Disable;
+use tabled::settings::object::LastColumn;
+use tabled::tables::TableValue::Column;
+use crate::git::BranchInfo;
 
 const BASE_PATH: &str = "/repos";
 
@@ -31,7 +36,7 @@ impl Default for ConfigFile {
 
 #[derive(Parser, Debug)]
 #[clap(name = "grepo")]
-#[clap(version = "0.1.0")]
+#[clap(version = "0.1.1")]
 #[clap(about = "A utility to help organize and search for data in git repos")]
 #[clap(setting = AppSettings::InferSubcommands)]
 struct Cli {
@@ -80,33 +85,25 @@ enum Commands {
         /// Optional: update the default base directory of watched repos
         path: Option<String>,
     },
+
     /// Show a list of settings saved
     ShowConfig {},
+
     /// Show location of config file
     ConfigPath {},
+
     /// Commands for watched repos
     #[clap(subcommand, alias = "w")]
     Watch(WatchCmds),
+
     /// Commands for repo branches
     #[clap(subcommand, alias = "b")]
     Branch(BranchCmds),
+
     /// Replaces the watched repo list with a list from current base directory
     #[clap(alias = "sbd")]
     ScanBaseDir {},
-}
 
-fn has_config(file_path: &str) -> bool {
-    if let Ok(contents) = fs::read_to_string(file_path) {
-        if contents.contains("base_path") && contents.contains("repos") {
-            true
-        } else {
-            println!("File exists but is missing data");
-            false
-        }
-    } else {
-        println!("File does not exist");
-        false
-    }
 }
 
 fn get_config() -> Result<ConfigFile, ConfyError> {
@@ -193,19 +190,21 @@ fn main() {
         }
         Commands::Branch(BranchCmds::Search { name }) => {
             let mut found_in_repo = git::search_repos(cfg.clone(), name.clone());
-            let mut repo_branch_concat = found_in_repo.iter()
-                .map(|(k,v)| format!("{} - {}\n", k.clone(), v.join(",")))
-                .collect::<String>();
+            let mut tables = Vec::new();
+            found_in_repo.iter().for_each(|(key,value)| {
+                tables.extend(value)
+            });
+
             println!(
-                "Search Pattern '{}' found in repos:\n--------------------------\n{}",
+                "Search Pattern '{}' found in repos:\n{}",
                 name,
-                repo_branch_concat
+                Table::new(tables).with(Style::re_structured_text()).to_string()
             )
         }
         Commands::Branch(BranchCmds::List {}) => {
-            git::get_repos(cfg).into_iter().for_each(|data| {
-                let branches = data.1.join("\n");
-                println!("Repo: {}\n--------------------------\n{}\n", data.0, branches);
+            git::get_repo_branches(cfg).into_iter().for_each(|(repo,branch_list)| {
+                let branches = branch_list.join("\n");
+                println!("Repo: {}\n--------------------------\n{}\n", repo, branches);
             })
         }
         Commands::Branch(BranchCmds::Curr {}) => {
