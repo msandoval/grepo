@@ -36,7 +36,7 @@ impl Default for ConfigFile {
 
 #[derive(Parser, Debug)]
 #[clap(name = "grepo")]
-#[clap(version = "0.1.1")]
+#[clap(version = "0.1.2")]
 #[clap(about = "A utility to help organize and search for data in git repos")]
 #[clap(setting = AppSettings::InferSubcommands)]
 struct Cli {
