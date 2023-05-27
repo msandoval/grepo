@@ -47,7 +47,15 @@ match and what repos they are in
 ```
 grepo branch search ma
 ```
+or you can now do a search for a string among all your commit messages in your watched repos
+```
+grepo commit search broke
+```
 
 ## Current version
-### Version 0.1.2
-- Using tabled for search output
+### Version 0.1.3
+    Added commit message and author search
+    Unified output using tabled
+    Updated cargo serde and clap versions
+    Fixed some needed flag fixes
+    Added error checking in places that was a little lacking
