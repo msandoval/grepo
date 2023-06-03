@@ -19,6 +19,7 @@ use tabled::{
     Table, Tabled,
 };
 
+
 const BASE_PATH: &str = "/repos";
 
 #[derive(Tabled, Debug, Clone, Serialize, Deserialize)]
@@ -143,25 +144,14 @@ fn concatenate_values(values: &Vec<String>) -> String {
     values.join("\n")
 }
 
-fn table_mini(header: &str, data: &str) {
-    let padding = 2;
-    println!(
-        "{}\n {}\n{}\n {}\n{}",
-        "=".repeat(data.len() + padding),
-        header,
-        "=".repeat(data.len() + padding),
-        data,
-        "=".repeat(data.len() + padding)
-    )
-}
-
 fn main() {
     let args = Cli::parse();
     let mut cfg = get_config().expect("Retrieving config file failed");
     match args.command {
         Commands::BaseDir { path } => match path {
             None => {
-                table_mini("Base Directory:", &cfg.base_path)
+                let bold = ansi_term::Style::new().bold();
+                println!("\n{} {}\n", bold.paint("Base Directory:"),&cfg.base_path);
             }
             Some(new_path) => {
                 let new_cfg = ConfigFile {
@@ -171,30 +161,22 @@ fn main() {
                 confy::store(env!("CARGO_PKG_NAME"), None, new_cfg).expect("Error writing to config file");
                 let updated_cfg = get_config().expect("Config file update failed");
                 println!(
-                    "Updated base path from {} to {}",
+                    "\nUpdated base path from {} to {}",
                     cfg.base_path, updated_cfg.base_path
                 );
             }
         }
 
         Commands::ShowConfig {} => {
-            println!(
-                "{}", 
-                Table::new(vec![cfg])
-                .with(Style::re_structured_text())
-            )
+            let bold = ansi_term::Style::new().bold();
+            println!("\n{} {}\n{}\n{}", bold.paint("Base Path:"), cfg.base_path, bold.paint("Watched Repos:"),cfg.repos.join("\n"))
         }
 
         Commands::ConfigPath {} => {
             let file = confy::get_configuration_file_path(env!("CARGO_PKG_NAME"), None)
                 .expect("Failed to retrieve config file path");
-            println!(
-                "{}", 
-                Table::new(vec![String::from(file.to_string_lossy())])
-                .with(Style::re_structured_text())
-                .with(Panel::header("Config Path:"))
-                .with(Disable::row(Rows::single(1)))
-            )
+            let bold = ansi_term::Style::new().bold();
+            println!("\n{} {}\n", bold.paint("Config Path:"), file.to_string_lossy());
         }
 
         Commands::Watch(WatchCmds::Add { names, reset_watched }) => {
