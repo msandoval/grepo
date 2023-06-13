@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt};
+use std::{collections::HashMap, fmt, rc::Rc};
 use crate::ConfigFile;
 use git2::{ErrorCode, Repository, Commit, ObjectType};
 use std::path::PathBuf;
@@ -6,32 +6,32 @@ use tabled::Tabled;
 
 #[derive(Tabled, Debug)]
 pub struct RepoBranchCommit {
-    pub repo: String,
-    pub branch: String,
-    pub commit: String,
-    pub author: String,
-    pub message: String,
+    pub repo: Rc<str>,
+    pub branch: Rc<str>,
+    pub commit: Rc<str>,
+    pub author: Rc<str>,
+    pub message: Rc<str>,
 }
-#[derive(Tabled, Clone)]
+#[derive(Tabled, Clone, PartialOrd, PartialEq, Ord, Eq)]
 pub struct BranchInfo {
-    pub repo: String,
-    pub branch: String,
+    pub repo: Rc<str>,
+    pub branch: Rc<str>,
 }
 
 #[derive(Clone)]
 pub struct BranchInfoList {
-    pub repo: String,
-    pub collection: Vec<BranchInfo>
+    pub repo: Rc<str>,
+    pub collection: Rc<[BranchInfo]>
 }
 impl BranchInfoList {
     pub fn branch_names(&self) -> Vec<String> {
-        self.collection.iter().map(|bi| bi.branch.clone()).collect()
+        self.collection.iter().map(|bi| bi.branch.clone().to_string()).collect()
     }
 }
 
 struct GitRepo {
     config: ConfigFile,
-    repo_name: String
+    repo_name: Rc<str>
 }
 
 #[derive(Debug)]
@@ -90,7 +90,7 @@ impl GitRepo {
     fn new(config: ConfigFile, repo_name: String) -> GitRepo {
         Self {
             config,
-            repo_name,
+            repo_name: Rc::from(repo_name),
         }
     }
     /// Open a Git repository and return object
@@ -104,6 +104,7 @@ impl GitRepo {
     }
     /// Get all local branches
     fn all_branches(&mut self) -> BranchInfoList {
+
         BranchInfoList { 
             repo: self.repo_name.clone(),
             collection: self.open()
@@ -116,7 +117,7 @@ impl GitRepo {
 
                     BranchInfo {
                         repo: self.repo_name.clone(),
-                        branch: branch_name,
+                        branch: branch_name.into(),
                     }
 
                 })
@@ -144,7 +145,7 @@ pub fn get_repo_branch_names(cfg: ConfigFile) -> Vec<BranchInfoList> {
         .clone()
         .into_iter()
         .map(|repo| {
-            GitRepo::new(cfg.clone(), repo.clone()).all_branches()
+            GitRepo::new(cfg.clone(), repo).all_branches()
         })
         .collect()
 }
@@ -152,9 +153,13 @@ pub fn get_repo_branch_names(cfg: ConfigFile) -> Vec<BranchInfoList> {
 pub fn search_repos(cfg: ConfigFile, name: String) -> HashMap<String, Vec<BranchInfo>> {
     cfg.clone().repos.into_iter().filter_map(|repo| {
         let branches = GitRepo::new(cfg.clone(), repo.clone()).all_branches();
-        let filtered_branches: Vec<BranchInfo> = branches.collection.into_iter()
-            .filter(|branch| {
-                branch.branch.contains(&name)
+        let filtered_branches: Vec<BranchInfo> = branches.collection.iter()
+            .filter_map(|binfo| {
+                if binfo.branch.contains(&name) {
+                    Some(binfo.clone())
+                } else {
+                    None
+                }
             })
             .collect();
         if !filtered_branches.is_empty() {
@@ -170,8 +175,8 @@ pub fn get_current_branch_name(cfg: ConfigFile) -> Vec<BranchInfo> {
         .clone()
         .into_iter()
         .map(|repo| BranchInfo { 
-            repo: repo.clone(), 
-            branch: GitRepo::new(cfg.clone(), repo).current_branch_name() 
+            repo: repo.clone().into(), 
+            branch: Rc::from(GitRepo::new(cfg.clone(), repo).current_branch_name())
         } )
         .collect::<Vec<BranchInfo>>()
 }
@@ -228,11 +233,11 @@ pub fn search_commits(cfg: ConfigFile, search_string: String, include_author: bo
                 })
                 .map(|commit| {
                     RepoBranchCommit {
-                        repo: repo_name.clone(),
-                        branch: branch_name.clone(),
-                        message: commit.message().unwrap_or("").trim().to_string(),
-                        author: commit.author().to_string(),
-                        commit: commit.id().to_string(),
+                        repo: Rc::from(repo_name.to_owned()),
+                        branch: Rc::from(branch_name.to_owned()),
+                        message: Rc::from(commit.message().unwrap_or("").trim()),
+                        author: Rc::from(commit.author().to_string()),
+                        commit: Rc::from(commit.id().to_string()),
                     }
                 })
                 .collect::<Vec<RepoBranchCommit>>());

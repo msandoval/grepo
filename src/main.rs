@@ -10,15 +10,16 @@ use dialoguer::Confirm;
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::fs;
+use std::rc::Rc;
 use tabled::{
     settings::{
         object::Rows,
-        Disable, Panel, Style,
+        Disable, Panel, Style, Format,
     },
     tables::ExtendedTable,
     Table, Tabled,
 };
-use tabled::settings::{Alignment, Modify};
+use tabled::settings::{Alignment, Modify, Padding};
 use tabled::settings::object::Columns;
 
 
@@ -27,7 +28,7 @@ const BASE_PATH: &str = "/repos";
 #[derive(Tabled, Debug, Clone, Serialize, Deserialize)]
 pub struct ConfigFile {
     #[tabled(rename = "Base Path")]
-    base_path: String,
+    base_path: Rc<str>,
     #[tabled(rename = "Repos", display_with = "concatenate_values")]
     repos: Vec<String>,
 }
@@ -35,7 +36,7 @@ pub struct ConfigFile {
 impl Default for ConfigFile {
     fn default() -> Self {
         Self {
-            base_path: BASE_PATH.to_string(),
+            base_path: Rc::from(BASE_PATH),
             repos: Vec::new(),
         }
     }
@@ -43,7 +44,7 @@ impl Default for ConfigFile {
 
 #[derive(Parser, Debug)]
 #[clap(name = "grepo")]
-#[clap(version = "0.1.3")]
+#[clap(version = "0.1.4")]
 #[clap(author = "Manuel Sandoval")]
 #[clap(about = "A utility to help organize and search for data in git repos")]
 struct Cli {
@@ -52,38 +53,52 @@ struct Cli {
 }
 
 #[derive(Subcommand, Debug)]
-enum WatchCmds {
+enum RepoCmds {
     /// Add a new repo to watch
     #[clap(arg_required_else_help = true)]
     Add {
-        /// Name (or comma-delimited string) of repo(s) to add to the watch
+        /// Name (or comma-delimited string) of repo(s)
         names: String,
         /// This flag will clear the current saved watched repos and add only those passed in
         #[clap(short, long)]
         reset_watched: bool,
     },
-    /// Remove a repo to watch
+    /// Remove a watched repo
     #[clap(arg_required_else_help = true)]
     Remove {
         /// Name (or comma-delimited string) of repo(s) to remove from watch
         names: String,
     },
-    /// View a list of watched repos
+    /// List of watched repos
     List {},
 }
 
 #[derive(Subcommand, Debug)]
 enum BranchCmds {
-    /// Search for a branch name in all watched repos
-    #[clap(arg_required_else_help = true)]
-    Search {
-        /// Pattern to look for in branch name in local branches
-        pattern: String,
-    },
     /// View a list of all local branches in all watched repos
     List {},
     /// Get a list of current branches all watched repos are on
-    Curr {},
+    #[clap(alias = "cur", alias = "curr")]
+    Current {},
+}
+
+#[derive(Subcommand,Debug)]
+enum SearchCmds {
+    /// Branch search in all watched repos
+    #[clap(alias = "-b", arg_required_else_help = true)]
+    Branch {
+        /// Search pattern
+        pattern: String
+    },
+    /// Commit search in all watched repos
+    #[clap(alias = "-c", arg_required_else_help = true)]
+    Commit {
+        /// Search pattern
+        pattern: String,
+        /// Optional: (true|false) include author name in search
+        #[clap(short, long)]
+        include_author: bool,
+    }
 }
 
 #[derive(Subcommand, Debug)]
@@ -101,33 +116,22 @@ enum Commands {
     ConfigPath {},
 
     /// Commands for watched repos
-    #[clap(subcommand, alias = "w")]
-    Watch(WatchCmds),
+    #[clap(subcommand, alias = "r")]
+    Repo(RepoCmds),
 
     /// Commands for repo branches
     #[clap(subcommand, alias = "b")]
     Branch(BranchCmds),
 
-    /// Commands for repo commits
-    #[clap(subcommand, alias = "c")]
-    Commit(CommitCmds),
+    /// Search commands
+    #[clap(subcommand, alias = "s")]
+    Search(SearchCmds),
 
     /// Replaces the watched repo list with a list from current base directory
     #[clap(alias = "sbd")]
     ScanBaseDir {},
 }
 
-#[derive(Subcommand, Debug)]
-enum CommitCmds {
-    /// Search for a commits messages in all watched repos
-    #[clap(arg_required_else_help = true)]
-    Search {
-        /// Pattern to look for in commit message
-        pattern: String,
-        #[clap(short, long)]
-        include_author: bool,
-    },
-}
 
 fn get_config() -> Result<ConfigFile, ConfyError> {
     match confy::load(env!("CARGO_PKG_NAME"), None) {
@@ -142,7 +146,7 @@ fn get_config() -> Result<ConfigFile, ConfyError> {
         Err(e) => Err(e),
     }
 }
-fn concatenate_values(values: &Vec<String>) -> String {
+fn concatenate_values(values: &[String]) -> String {
     values.join("\n")
 }
 
@@ -157,7 +161,7 @@ fn main() {
             }
             Some(new_path) => {
                 let new_cfg = ConfigFile {
-                    base_path: new_path,
+                    base_path: Rc::from(new_path),
                     ..cfg
                 };
                 confy::store(env!("CARGO_PKG_NAME"), None, new_cfg).expect("Error writing to config file");
@@ -181,7 +185,7 @@ fn main() {
             println!("\n{} {}\n", bold.paint("Config Path:"), file.to_string_lossy());
         }
 
-        Commands::Watch(WatchCmds::Add { names, reset_watched }) => {
+        Commands::Repo(RepoCmds::Add { names, reset_watched }) => {
             let mut repos = HashSet::new();
             if !reset_watched {
                 repos = cfg.clone().repos.into_iter().collect()
@@ -190,13 +194,14 @@ fn main() {
             let valid_repos = names.split(',')
                 .map(|name| name.trim().to_string())
                 .filter(|name| {
-                    if git::get_valid_repo(cfg.clone(), name.clone()) {
+                    if git::get_valid_repo(cfg.clone(), name.to_string()) {
                         true
                     } else {
-                        println!("Skipping {}: Not a valid repo", name.clone());
+                        println!("Skipping {}: Not a valid repo", name);
                         false
                     }
-                });
+                })
+                .collect::<HashSet<String>>();
             let mut new_repos = repos;
             new_repos.extend(valid_repos);
             cfg.repos = new_repos.into_iter().collect();
@@ -206,16 +211,11 @@ fn main() {
             let mut output_repos = cfg.repos.clone();
             output_repos.sort();
 
-            println!(
-                "{}", 
-                Table::new(output_repos)
-                .with(Style::re_structured_text())
-                .with(Panel::header("Updated Repo List:"))
-                .with(Disable::row(Rows::single(1)))
-            )
+            let bold = ansi_term::Style::new().bold();
+            println!("{}\n{}",bold.paint("Updated Watched Repos:"), output_repos.join("\n"))
         }
 
-        Commands::Watch(WatchCmds::Remove { names }) => {
+        Commands::Repo(RepoCmds::Remove { names }) => {
             for name in names.split(',') {
                 if let Some(pos) = cfg.repos.iter().position(|s| *s == name) {
                     cfg.repos.remove(pos);
@@ -230,41 +230,20 @@ fn main() {
             output_repos.is_empty().then(|| output_repos.push("** No Repos Found **".to_string()));
             output_repos.sort();
 
-            println!(
-                "{}", 
-                Table::new(output_repos)
-                .with(Style::re_structured_text())
-                .with(Panel::header("Updated Repo List:"))
-                .with(Disable::row(Rows::single(1)))
-            )
+
+            let bold = ansi_term::Style::new().bold();
+            println!("{}\n{}",bold.paint("Updated Watched Repos:"), output_repos.join("\n"))
+
         }
 
-        Commands::Watch(WatchCmds::List {}) => {
+        Commands::Repo(RepoCmds::List {}) => {
             let mut output_repos = cfg.repos;
             output_repos.is_empty().then(|| output_repos.push("** No Repos Found **".to_string()));
             output_repos.sort();
             
-            println!(
-                "{}", 
-                Table::new(output_repos)
-                .with(Style::re_structured_text())
-                .with(Panel::header("Watched Repos:"))
-                .with(Disable::row(Rows::single(1)))
-            )
-        }
+            let bold = ansi_term::Style::new().bold();
+            println!("{}\n{}",bold.paint("Watched Repos:"), output_repos.join("\n"))
 
-        Commands::Branch(BranchCmds::Search { pattern }) => {
-            let found_in_repo = git::search_repos(cfg.clone(), pattern.clone());
-            let mut tables = Vec::new();
-            found_in_repo.iter().for_each(|(_,value)| {
-                tables.extend(value)
-            });
-
-            println!(
-                "Search Pattern '{}' found in repos:\n{}",
-                pattern,
-                Table::new(tables).with(Style::re_structured_text())
-            )
         }
 
         Commands::Branch(BranchCmds::List {}) => {
@@ -273,25 +252,30 @@ fn main() {
                 output_branches.is_empty().then(|| output_branches.push("** No Branches Found **".to_string()));
                 output_branches.sort();
 
+                let bold = ansi_term::Style::new().bold();
                 println!(
                     "\n{}",
                     Table::new(output_branches)
                         .with(Style::empty())
-                        .with(Panel::header(format!("Repo: {}", blist.repo)))
+                        .with(Panel::header(format!("{} {}", bold.paint("Repo:"), bold.paint(blist.repo.to_string()))))
                         .with(Disable::row(Rows::single(1)))
+                        .with(Modify::new(Columns::first()).with(Padding::new(0,0,0,0)))
                 )
             })
         }
 
-        Commands::Branch(BranchCmds::Curr {}) => {
-                println!(
-                    "{}",
-                    Table::new(git::get_current_branch_name(cfg))
-                        .with(Style::empty())
-                        // .with(Alignment::right())
-                        .with(Disable::row(Rows::single(0)))
-                        .with(Modify::new(Columns::single(0)).with(Alignment::right()))
-                );
+        Commands::Branch(BranchCmds::Current {}) => {
+            let bold = ansi_term::Style::new().bold();
+            println!(
+                "{}",
+                Table::new(git::get_current_branch_name(cfg))
+                    .with(Style::empty())
+                    .with(Disable::row(Rows::single(0)))
+                    .with(Modify::new(Columns::single(0))
+                    .with(Alignment::left()))
+                    .with(Modify::new(Columns::first()).with(Format::content(|s| bold.paint(s).to_string())))
+                    .with(Modify::new(Columns::first()).with(Padding::new(0,0,0,0)))
+            );
         }
 
         Commands::ScanBaseDir {} => {
@@ -300,7 +284,7 @@ fn main() {
                     base_path: cfg.base_path.clone(),
                     repos: vec![],
                 };
-                new_config.repos = fs::read_dir(cfg.clone().base_path)
+                new_config.repos = fs::read_dir(cfg.clone().base_path.to_string())
                     .unwrap()
                     .filter_map(|path|
                         if path.as_ref().unwrap().path().is_dir() {
@@ -332,16 +316,39 @@ fn main() {
                     .with(Style::re_structured_text())
                     .with(Panel::header("Watched Repos:"))
                     .with(Disable::row(Rows::single(1)))
+                    .with(Modify::new(Columns::first()).with(Padding::new(0,0,0,0)))
                 )
             }
         }
+        Commands::Search(SearchCmds::Branch { pattern}) => {
+            let found_in_repo = git::search_repos(cfg.clone(), pattern.clone());
+            let mut tables = Vec::new();
+            found_in_repo.iter().for_each(|(_,value)| {
+                tables.extend(value)
+            });
+            tables.sort();
 
-        Commands::Commit(CommitCmds::Search{ pattern, include_author }) => {
+            let bold = ansi_term::Style::new().bold();
+            println!(
+                " {} '{}' {}\n{}",
+                bold.paint("Search Pattern"),
+                pattern,
+                bold.paint("found in repos:"),
+                Table::new(tables)
+                    .with(Style::empty())
+                    .with(Disable::row(Rows::single(0)))
+                    .with(Modify::new(Columns::first()).with(Padding::new(0,0,0,0)))
+            )
+        }
+        Commands::Search(SearchCmds::Commit{ pattern, include_author }) => {
+            let bold = ansi_term::Style::new().bold();
             match git::search_commits(cfg.clone(), pattern.clone(), include_author) {
                 Ok(results) => {
                     println!(
-                        "Search Pattern '{}' found in repos:\n{}",
+                        "{} '{}' {}\n{}",
+                        bold.paint("Search Pattern"),
                         pattern,
+                        bold.paint("found in repos:"),
                         ExtendedTable::new(results)
                     )
                  },

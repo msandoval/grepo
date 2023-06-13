@@ -53,6 +53,11 @@ grepo commit search broke
 ```
 
 ## Current version
+### Version 0.1.4
+    Output simplification
+    Minor memory updates
+
+## Previous versions
 ### Version 0.1.3
     Added commit message and author search
     Unified output using tabled
