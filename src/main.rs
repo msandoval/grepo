@@ -18,6 +18,8 @@ use tabled::{
     tables::ExtendedTable,
     Table, Tabled,
 };
+use tabled::settings::{Alignment, Modify};
+use tabled::settings::object::Columns;
 
 
 const BASE_PATH: &str = "/repos";
@@ -282,12 +284,14 @@ fn main() {
         }
 
         Commands::Branch(BranchCmds::Curr {}) => {
-            git::get_current_branch_name(cfg).into_iter().for_each(|branch_info| {
                 println!(
                     "{}",
-                    ExtendedTable::new(vec![branch_info])
+                    Table::new(git::get_current_branch_name(cfg))
+                        .with(Style::empty())
+                        // .with(Alignment::right())
+                        .with(Disable::row(Rows::single(0)))
+                        .with(Modify::new(Columns::single(0)).with(Alignment::right()))
                 );
-            })
         }
 
         Commands::ScanBaseDir {} => {
