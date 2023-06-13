@@ -274,9 +274,9 @@ fn main() {
                 output_branches.sort();
 
                 println!(
-                    "{}",
+                    "\n{}",
                     Table::new(output_branches)
-                        .with(Style::re_structured_text())
+                        .with(Style::empty())
                         .with(Panel::header(format!("Repo: {}", blist.repo)))
                         .with(Disable::row(Rows::single(1)))
                 )
