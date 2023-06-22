@@ -45,11 +45,19 @@ grepo branch curr
 or search for a string amongst the branches and return a list of branches that 
 match and what repos they are in
 ```
-grepo branch search ma
+grepo search branch ma
+```
+or shorten to:
+```
+grepo s -b ma
 ```
 or you can now do a search for a string among all your commit messages in your watched repos
 ```
-grepo commit search broke
+grepo search commit broke
+```
+or shorten to:
+```
+grepo s -c broke
 ```
 
 ## Current version
