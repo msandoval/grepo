@@ -64,6 +64,7 @@ grepo s -c broke
 ### Version 0.1.4
     Output simplification
     Minor memory updates
+    Added search as a command instead of an subcommand: see above README for example.
 
 ## Previous versions
 ### Version 0.1.3
